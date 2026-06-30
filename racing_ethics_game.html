@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ซิ่งทะลุด่าน: นักจรรยาบรรณดิจิทัล</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.1/sweetalert2.all.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.1/sweetalert2.min.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;700;900&display=swap');
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; font-family: 'Kanit', sans-serif;
+    background: linear-gradient(135deg, #1e1b4b, #312e81, #1e1b4b);
+    overflow: hidden; height: 100vh; width: 100vw;
+    user-select: none; -webkit-user-select: none; touch-action: none;
+  }
+  #gameContainer {
+    position: relative; width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #gameCanvas {
+    display: block; background: #4a4a4a;
+    box-shadow: 0 0 60px rgba(99,102,241,0.5);
+    max-width: 100vw; max-height: 100vh;
+  }
+  .hud-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 10px; z-index: 20; pointer-events: none;
+  }
+  #problemBanner {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: white; font-weight: 900; font-size: clamp(14px, 2.5vw, 22px);
+    padding: 10px 24px; border-radius: 20px;
+    border: 4px solid white;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.3), 0 0 30px rgba(245,158,11,0.6);
+    text-align: center; max-width: 92%;
+    animation: floaty 2.5s ease-in-out infinite;
+  }
+  #problemBanner.flash {
+    animation: bannerFlash 0.4s ease-in-out 4;
+  }
+  @keyframes floaty {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+  @keyframes bannerFlash {
+    0%, 100% { background: linear-gradient(135deg, #f59e0b, #ef4444); transform: scale(1); }
+    50% { background: linear-gradient(135deg, #fde047, #f97316); transform: scale(1.08); }
+  }
+  .stats-row {
+    display: flex; justify-content: space-between; width: 100%;
+    max-width: 700px; margin-top: 8px; padding: 0 10px;
+  }
+  #scoreBox, #livesBox {
+    background: rgba(0,0,0,0.55); border-radius: 14px; padding: 6px 14px;
+    border: 2px solid rgba(255,255,255,0.4);
+    font-weight: 700; color: white; font-size: clamp(14px, 2vw, 18px);
+    display: flex; align-items: center; gap: 6px;
+    pointer-events: auto;
+  }
+  .heart { font-size: 20px; transition: transform 0.2s; }
+  .heart.lost { opacity: 0.25; transform: scale(0.7); }
+  #pauseBtn {
+    background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.4);
+    color: white; border-radius: 14px; padding: 6px 14px; font-weight: 700;
+    pointer-events: auto; cursor: pointer; font-size: 16px;
+  }
+  #pauseBtn:active { transform: scale(0.92); }
+  .touch-controls {
+    position: absolute; bottom: 20px; left: 0; right: 0;
+    display: flex; justify-content: space-between; padding: 0 30px;
+    z-index: 20;
+  }
+  .touch-btn {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(99,102,241,0.85); border: 4px solid white;
+    color: white; font-size: 36px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.4);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .touch-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.4); }
+  .glow-text {
+    text-shadow: 0 0 10px #fde047, 0 0 20px #f97316, 0 0 30px #ef4444;
+  }
+  .swal2-popup { border-radius: 24px !important; font-family: 'Kanit', sans-serif !important; }
+  @keyframes bounce-title {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50% { transform: translateY(-12px) rotate(2deg); }
+  }
+  .bounce-title { animation: bounce-title 1.2s ease-in-out infinite; display: inline-block; }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+  <div class="hud-top">
+    <div id="problemBanner">กำลังโหลดสถานการณ์...</div>
+    <div class="stats-row">
+      <div id="scoreBox">⭐ <span id="scoreVal">0</span></div>
+      <div id="livesBox">
+        <span class="heart" id="heart1">❤️</span>
+        <span class="heart" id="heart2">❤️</span>
+        <span class="heart" id="heart3">❤️</span>
+      </div>
+      <button id="pauseBtn">⏸️ พัก</button>
+    </div>
+  </div>
+  <div class="touch-controls">
+    <div class="touch-btn" id="leftBtn">◀</div>
+    <div class="touch-btn" id="rightBtn">▶</div>
+  </div>
+</div>
+
+<script>
+// ============ AUDIO (Web Audio API, synthesized) ============
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+function ensureAudio() { if (!actx) actx = new AudioCtx(); }
+
+function playCorrectSound() {
+  ensureAudio();
+  const t = actx.currentTime;
+  const osc = actx.createOscillator();
+  const gain = actx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(880, t);
+  osc.frequency.exponentialRampToValueAtTime(1760, t + 0.12);
+  gain.gain.setValueAtTime(0.25, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  osc.connect(gain); gain.connect(actx.destination);
+  osc.start(t); osc.stop(t + 0.3);
+}
+
+function playWrongSound() {
+  ensureAudio();
+  const t = actx.currentTime;
+  const osc = actx.createOscillator();
+  const gain = actx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(220, t);
+  osc.frequency.exponentialRampToValueAtTime(80, t + 0.4);
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+  osc.connect(gain); gain.connect(actx.destination);
+  osc.start(t); osc.stop(t + 0.45);
+}
+
+function playGameOverSound() {
+  ensureAudio();
+  const t = actx.currentTime;
+  [392, 349, 294, 220].forEach((f, i) => {
+    const osc = actx.createOscillator();
+    const gain = actx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(f, t + i * 0.18);
+    gain.gain.setValueAtTime(0.25, t + i * 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.18 + 0.3);
+    osc.connect(gain); gain.connect(actx.destination);
+    osc.start(t + i * 0.18); osc.stop(t + i * 0.18 + 0.3);
+  });
+}
+
+function playMilestoneSound() {
+  ensureAudio();
+  const t = actx.currentTime;
+  [523, 659, 784].forEach((f, i) => {
+    const osc = actx.createOscillator();
+    const gain = actx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(f, t + i * 0.1);
+    gain.gain.setValueAtTime(0.2, t + i * 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.25);
+    osc.connect(gain); gain.connect(actx.destination);
+    osc.start(t + i * 0.1); osc.stop(t + i * 0.1 + 0.25);
+  });
+}
+
+// ============ SCENARIOS (อ้างอิงจากเนื้อหาจริยธรรม/พ.ร.บ.คอมพิวเตอร์) ============
+const scenarios = [
+  {
+    title: "เพื่อนฝากรหัสผ่านเฟซบุ๊กให้ช่วยดูแลบัญชี",
+    correct: ["เก็บรหัสเป็นความลับ ไม่บอกใคร", "ปฏิเสธอย่างสุภาพ ไม่รับฝากรหัส"],
+    wrong: ["เอารหัสไปบอกเพื่อนคนอื่น", "แอบเข้าไปอ่านข้อความส่วนตัวของเพื่อน"]
+  },
+  {
+    title: "เจอข่าวลือที่ยังไม่ยืนยันความจริงในไลน์กลุ่ม",
+    correct: ["ตรวจสอบแหล่งข่าวก่อนเชื่อ", "แจ้งเตือนเพื่อนว่าข้อมูลยังไม่ชัวร์"],
+    wrong: ["กดแชร์ต่อทันทีโดยไม่ตรวจสอบ", "แต่งเรื่องเพิ่มให้น่าตื่นเต้น"]
+  },
+  {
+    title: "ทำรายงานกลุ่มแล้วเจอบทความดี ๆ จากเว็บไซต์อื่น",
+    correct: ["นำมาใช้พร้อมใส่อ้างอิงแหล่งที่มา", "สรุปเนื้อหาด้วยภาษาตัวเอง"],
+    wrong: ["คัดลอกทั้งหมดมาอ้างว่าเขียนเอง", "ใช้โปรแกรมที่ไม่มีลิขสิทธิ์ทำรายงาน"]
+  },
+  {
+    title: "เจอเพื่อนกำลังโดนกลั่นแกล้งในคอมเมนต์ออนไลน์",
+    correct: ["เข้าไปให้กำลังใจเพื่อน", "รายงาน (Report) ข้อความที่ไม่เหมาะสม"],
+    wrong: ["ร่วมคอมเมนต์ล้อเลียนตาม", "ตัดต่อภาพเพื่อนไปล้อเลียนต่อ"]
+  },
+  {
+    title: "อยากโหลดเกม/โปรแกรมมาเล่น แต่ต้องเสียเงิน",
+    correct: ["ใช้เวอร์ชันฟรีที่ถูกลิขสิทธิ์", "ขออนุญาตผู้ปกครองซื้อของแท้"],
+    wrong: ["โหลดไฟล์เถื่อนจากเว็บละเมิดลิขสิทธิ์", "แชร์ไฟล์เถื่อนให้เพื่อนต่อ"]
+  },
+  {
+    title: "เจอกระเป๋าสตางค์ของเพื่อนวางลืมไว้ในห้องคอมพิวเตอร์",
+    correct: ["เก็บไว้แล้วส่งคืนเจ้าของทันที", "แจ้งครูให้ช่วยตามหาเจ้าของ"],
+    wrong: ["เปิดดูข้อมูลส่วนตัวในกระเป๋า", "เก็บไว้เป็นของตัวเอง"]
+  },
+  {
+    title: "อยากใช้คอมพิวเตอร์ในห้องสมุดที่มีคนต่อแถวรออยู่",
+    correct: ["ใช้งานเท่าที่จำเป็นแล้วสละให้คนถัดไป", "รอคิวอย่างมีมารยาท"],
+    wrong: ["ใช้เวลานานเกินจำเป็นจนคนอื่นไม่ได้ใช้", "แซงคิวเพื่อนคนอื่น"]
+  },
+  {
+    title: "เห็นรหัสผ่านของเพื่อนที่ลืมออกจากระบบคอมพิวเตอร์ในห้องเรียน",
+    correct: ["แจ้งให้เพื่อนออกจากระบบทันที", "ปิดหน้าจอไม่เข้าไปยุ่งกับบัญชี"],
+    wrong: ["แอบเข้าไปแก้ไขข้อมูลในบัญชีเพื่อน", "เข้าไปดูข้อมูลส่วนตัวของเพื่อน"]
+  }
+];
+
+// ============ GAME STATE ============
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let CW = 480, CH = 800;
+function resizeCanvas() {
+  const maxH = window.innerHeight - 10;
+  const maxW = window.innerWidth - 10;
+  const ratio = 480 / 800;
+  let h = maxH;
+  let w = h * ratio;
+  if (w > maxW) { w = maxW; h = w / ratio; }
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  canvas.width = CW; canvas.height = CH;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const LANES = 3;
+const ROAD_LEFT = 40, ROAD_RIGHT = CW - 40;
+const ROAD_WIDTH = ROAD_RIGHT - ROAD_LEFT;
+const LANE_WIDTH = ROAD_WIDTH / LANES;
+function laneX(lane) { return ROAD_LEFT + LANE_WIDTH * lane + LANE_WIDTH / 2; }
+
+let game = {
+  running: false,
+  paused: false,
+  score: 0,
+  lives: 3,
+  speed: 3.2,
+  baseSpeed: 3.2,
+  laneIndex: 1,
+  carX: laneX(1),
+  carTargetX: laneX(1),
+  carTilt: 0,
+  carY: CH - 150,
+  roadOffset: 0,
+  items: [],
+  particles: [],
+  smokeTimer: 0,
+  shakeTime: 0,
+  shakeMag: 0,
+  flashColor: null,
+  flashAlpha: 0,
+  scenarioIndex: 0,
+  lastMilestone: 0,
+  spawnTimer: 0,
+  highScore: parseInt(localStorage.getItem('racingEthicsHighScore') || '0', 10)
+};
+
+function pickScenario() {
+  game.scenarioIndex = Math.floor(Math.random() * scenarios.length);
+  const s = scenarios[game.scenarioIndex];
+  document.getElementById('problemBanner').innerHTML = '🚦 สถานการณ์: ' + s.title;
+}
+
+function flashBanner() {
+  const el = document.getElementById('problemBanner');
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
+// ============ CAR DRAWING (Canvas, no emoji) ============
+function drawPlayerCar(x, y, tilt) {
+  tilt = tilt || 0;
+  ctx.save();
+  ctx.translate(x, y);
+  // shadow shifts opposite to tilt direction for a "leaning" feel
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(-tilt * 18, 8, 26, 38, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.rotate(tilt);
+  // body (facing up/forward)
+  const grad = ctx.createLinearGradient(-22, -45, 22, 45);
+  grad.addColorStop(0, '#3b82f6');
+  grad.addColorStop(1, '#1d4ed8');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(0, -48);
+  ctx.lineTo(18, -30);
+  ctx.lineTo(22, 10);
+  ctx.lineTo(16, 44);
+  ctx.lineTo(-16, 44);
+  ctx.lineTo(-22, 10);
+  ctx.lineTo(-18, -30);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#1e3a8a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // windshield (front, since car faces up)
+  ctx.fillStyle = '#bfdbfe';
+  ctx.beginPath();
+  ctx.moveTo(-12, -28);
+  ctx.lineTo(12, -28);
+  ctx.lineTo(9, -8);
+  ctx.lineTo(-9, -8);
+  ctx.closePath();
+  ctx.fill();
+
+  // rear window
+  ctx.fillStyle = '#93c5fd';
+  ctx.beginPath();
+  ctx.moveTo(-10, 14);
+  ctx.lineTo(10, 14);
+  ctx.lineTo(8, 28);
+  ctx.lineTo(-8, 28);
+  ctx.closePath();
+  ctx.fill();
+
+  // stripe
+  ctx.fillStyle = '#fde047';
+  ctx.fillRect(-4, -44, 8, 88);
+
+  // headlights (front, top since facing up)
+  ctx.fillStyle = '#fef9c3';
+  ctx.beginPath();
+  ctx.ellipse(-13, -42, 5, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(13, -42, 5, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // taillights (rear, bottom)
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.ellipse(-12, 42, 4, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(12, 42, 4, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // wheels
+  ctx.fillStyle = '#111827';
+  ctx.fillRect(-25, -22, 8, 18);
+  ctx.fillRect(17, -22, 8, 18);
+  ctx.fillRect(-25, 18, 8, 18);
+  ctx.fillRect(17, 18, 8, 18);
+
+  ctx.restore();
+}
+
+// ============ SMOKE PARTICLES ============
+function spawnSmoke() {
+  game.particles.push({
+    x: game.carX + (Math.random() - 0.5) * 14,
+    y: game.carY + 46,
+    r: 6 + Math.random() * 4,
+    alpha: 0.5,
+    vy: 1 + Math.random() * 0.8,
+    vx: (Math.random() - 0.5) * 1.2
+  });
+}
+
+function updateParticles() {
+  for (let i = game.particles.length - 1; i >= 0; i--) {
+    const p = game.particles[i];
+    p.y += p.vy;
+    p.x += p.vx;
+    p.r += 0.3;
+    p.alpha -= 0.02;
+    if (p.alpha <= 0) game.particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (const p of game.particles) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.alpha);
+    ctx.fillStyle = '#9ca3af';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ============ ITEM SPAWN (choice boxes) ============
+function spawnItem() {
+  const s = scenarios[game.scenarioIndex];
+  const isCorrect = Math.random() < 0.5;
+  const text = isCorrect
+    ? s.correct[Math.floor(Math.random() * s.correct.length)]
+    : s.wrong[Math.floor(Math.random() * s.wrong.length)];
+  const lane = Math.floor(Math.random() * LANES);
+  game.items.push({
+    lane, x: laneX(lane), y: -60, w: Math.min(LANE_WIDTH - 6, 175), h: 52,
+    correct: isCorrect, text, collected: false
+  });
+}
+
+function wrapText(ctx, text, maxWidth) {
+  const chars = text.split('');
+  let lines = [];
+  let line = '';
+  for (const ch of chars) {
+    const test = line + ch;
+    if (ctx.measureText(test).width > maxWidth && line.length > 0) {
+      lines.push(line);
+      line = ch;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawItem(item) {
+  ctx.save();
+  ctx.translate(item.x, item.y);
+  ctx.fillStyle = 'rgba(79,70,229,0.92)';
+  roundRect(ctx, -item.w / 2, -item.h / 2, item.w, item.h, 14);
+  ctx.fill();
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = 3;
+  roundRect(ctx, -item.w / 2, -item.h / 2, item.w, item.h, 14);
+  ctx.stroke();
+
+  ctx.fillStyle = 'white';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const maxTextWidth = item.w - 16;
+  let fontSize = 19;
+  ctx.font = 'bold ' + fontSize + 'px Kanit, sans-serif';
+  while (ctx.measureText(item.text).width > maxTextWidth && fontSize > 11) {
+    fontSize -= 1;
+    ctx.font = 'bold ' + fontSize + 'px Kanit, sans-serif';
+  }
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  ctx.strokeStyle = 'black';
+  ctx.lineWidth = 4;
+  ctx.strokeText(item.text, 0, 1);
+  ctx.fillText(item.text, 0, 1);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// ============ ROAD DRAW ============
+function drawRoad() {
+  ctx.fillStyle = '#52525b';
+  ctx.fillRect(0, 0, CW, CH);
+
+  // grass sides
+  ctx.fillStyle = '#16a34a';
+  ctx.fillRect(0, 0, ROAD_LEFT, CH);
+  ctx.fillRect(ROAD_RIGHT, 0, CW - ROAD_RIGHT, CH);
+
+  // road
+  ctx.fillStyle = '#3f3f46';
+  ctx.fillRect(ROAD_LEFT, 0, ROAD_WIDTH, CH);
+
+  // red-white edge stripes
+  const stripeH = 30;
+  const offset = game.roadOffset % (stripeH * 2);
+  for (let y = -stripeH * 2 + offset; y < CH; y += stripeH * 2) {
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(ROAD_LEFT - 12, y, 12, stripeH);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(ROAD_LEFT - 12, y + stripeH, 12, stripeH);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(ROAD_RIGHT, y, 12, stripeH);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(ROAD_RIGHT, y + stripeH, 12, stripeH);
+  }
+
+  // lane dividers
+  ctx.strokeStyle = '#fde047';
+  ctx.lineWidth = 5;
+  ctx.setLineDash([28, 24]);
+  const laneOffset = game.roadOffset % 52;
+  for (let i = 1; i < LANES; i++) {
+    const x = ROAD_LEFT + LANE_WIDTH * i;
+    ctx.beginPath();
+    ctx.moveTo(x, -laneOffset);
+    ctx.lineTo(x, CH);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+// ============ MAIN UPDATE / LOOP ============
+let lastTime = performance.now();
+
+function updateHUD() {
+  document.getElementById('scoreVal').textContent = game.score;
+  for (let i = 1; i <= 3; i++) {
+    const h = document.getElementById('heart' + i);
+    if (i > game.lives) h.classList.add('lost'); else h.classList.remove('lost');
+  }
+}
+
+function triggerShake(mag) {
+  game.shakeTime = 18;
+  game.shakeMag = mag;
+}
+
+function triggerFlash(color) {
+  game.flashColor = color;
+  game.flashAlpha = 0.5;
+}
+
+function handleCollision(item) {
+  item.collected = true;
+  if (item.correct) {
+    game.score += 10;
+    game.speed = Math.min(game.baseSpeed + 8, game.speed + 0.15);
+    playCorrectSound();
+    spawnStars(item.x, item.y);
+  } else {
+    game.lives -= 1;
+    playWrongSound();
+    triggerShake(10);
+    triggerFlash('rgba(239,68,68,0.45)');
+    updateHUD();
+    if (game.lives <= 0) {
+      endGame();
+      return;
+    }
+  }
+  updateHUD();
+  if (game.score - game.lastMilestone >= 50) {
+    game.lastMilestone = Math.floor(game.score / 50) * 50;
+    pickScenario();
+    flashBanner();
+    playMilestoneSound();
+  }
+}
+
+function spawnStars(x, y) {
+  for (let i = 0; i < 12; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 3;
+    game.particles.push({
+      x, y, r: 3 + Math.random() * 2, alpha: 1,
+      vy: Math.sin(ang) * speed, vx: Math.cos(ang) * speed,
+      star: true
+    });
+  }
+}
+
+function drawParticlesAll() {
+  for (const p of game.particles) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.alpha);
+    if (p.star) {
+      ctx.fillStyle = '#fde047';
+      drawStar(ctx, p.x, p.y, p.r + 2, p.r, 5);
+    } else {
+      ctx.fillStyle = '#9ca3af';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function drawStar(ctx, cx, cy, outerR, innerR, points) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const ang = (Math.PI / points) * i - Math.PI / 2;
+    const x = cx + Math.cos(ang) * r;
+    const y = cy + Math.sin(ang) * r;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function updateParticlesAll() {
+  for (let i = game.particles.length - 1; i >= 0; i--) {
+    const p = game.particles[i];
+    if (p.star) {
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.15;
+      p.alpha -= 0.025;
+    } else {
+      p.y += p.vy; p.x += p.vx;
+      p.r += 0.3;
+      p.alpha -= 0.02;
+    }
+    if (p.alpha <= 0) game.particles.splice(i, 1);
+  }
+}
+
+function update(dt) {
+  if (!game.running || game.paused) return;
+
+  // car smooth move
+  const prevX = game.carX;
+  game.carX += (game.carTargetX - game.carX) * 0.18;
+  const moveDelta = game.carX - prevX;
+  const targetTilt = Math.max(-0.45, Math.min(0.45, moveDelta * 0.12));
+  game.carTilt += (targetTilt - game.carTilt) * 0.25;
+
+  // road scroll
+  game.roadOffset += game.speed;
+
+  // smoke
+  game.smokeTimer += dt;
+  if (game.smokeTimer > 40) {
+    spawnSmoke();
+    game.smokeTimer = 0;
+  }
+
+  // spawn items
+  game.spawnTimer += dt;
+  const spawnInterval = Math.max(550, 1000 - game.score * 1.5);
+  if (game.spawnTimer > spawnInterval) {
+    spawnItem();
+    game.spawnTimer = 0;
+  }
+
+  // update items
+  for (let i = game.items.length - 1; i >= 0; i--) {
+    const it = game.items[i];
+    it.y += game.speed * 1.3;
+    if (!it.collected) {
+      const dx = Math.abs(it.x - game.carX);
+      const dy = Math.abs(it.y - game.carY);
+      if (dx < 36 && dy < 50) {
+        handleCollision(it);
+      }
+    }
+    if (it.y > CH + 80) game.items.splice(i, 1);
+  }
+
+  updateParticlesAll();
+
+  if (game.shakeTime > 0) game.shakeTime--;
+  if (game.flashAlpha > 0) game.flashAlpha -= 0.03;
+}
+
+function render() {
+  ctx.save();
+  if (game.shakeTime > 0) {
+    const dx = (Math.random() - 0.5) * game.shakeMag;
+    const dy = (Math.random() - 0.5) * game.shakeMag;
+    ctx.translate(dx, dy);
+  }
+  drawRoad();
+  for (const it of game.items) if (!it.collected) drawItem(it);
+  drawParticlesAll();
+  drawPlayerCar(game.carX, game.carY, game.carTilt);
+  ctx.restore();
+
+  if (game.flashAlpha > 0) {
+    ctx.fillStyle = game.flashColor || 'rgba(239,68,68,0.4)';
+    ctx.globalAlpha = Math.max(0, game.flashAlpha);
+    ctx.fillRect(0, 0, CW, CH);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function loop(now) {
+  const dt = now - lastTime;
+  lastTime = now;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ============ CONTROLS ============
+function moveLeft() {
+  if (!game.running || game.paused) return;
+  game.laneIndex = Math.max(0, game.laneIndex - 1);
+  game.carTargetX = laneX(game.laneIndex);
+}
+function moveRight() {
+  if (!game.running || game.paused) return;
+  game.laneIndex = Math.min(LANES - 1, game.laneIndex + 1);
+  game.carTargetX = laneX(game.laneIndex);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') moveLeft();
+  if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') moveRight();
+});
+
+document.getElementById('leftBtn').addEventListener('touchstart', (e) => { e.preventDefault(); moveLeft(); });
+document.getElementById('rightBtn').addEventListener('touchstart', (e) => { e.preventDefault(); moveRight(); });
+document.getElementById('leftBtn').addEventListener('click', moveLeft);
+document.getElementById('rightBtn').addEventListener('click', moveRight);
+
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  if (!game.running) return;
+  togglePause();
+});
+
+function togglePause() {
+  game.paused = !game.paused;
+  if (game.paused) {
+    Swal.fire({
+      title: '⏸️ พักเกม',
+      html: `<p style="font-size:16px;">คะแนนปัจจุบัน: <b>${game.score}</b></p>`,
+      confirmButtonText: '▶️ เล่นต่อ',
+      confirmButtonColor: '#6366f1',
+      allowOutsideClick: false,
+      allowEscapeKey: false
+    }).then(() => {
+      game.paused = false;
+    });
+  }
+}
+
+// ============ GAME FLOW ============
+function resetGame() {
+  game.score = 0;
+  game.lives = 3;
+  game.speed = game.baseSpeed;
+  game.laneIndex = 1;
+  game.carX = laneX(1);
+  game.carTargetX = laneX(1);
+  game.items = [];
+  game.particles = [];
+  game.lastMilestone = 0;
+  game.spawnTimer = 0;
+  updateHUD();
+  pickScenario();
+}
+
+function startGame() {
+  ensureAudio();
+  resetGame();
+  game.running = true;
+  game.paused = false;
+}
+
+function endGame() {
+  game.running = false;
+  playGameOverSound();
+  triggerShake(20);
+  const isNewHigh = game.score > game.highScore;
+  if (isNewHigh) {
+    game.highScore = game.score;
+    localStorage.setItem('racingEthicsHighScore', String(game.highScore));
+  }
+  setTimeout(() => {
+    Swal.fire({
+      title: '💥 เกมจบแล้ว!',
+      html: `
+        <p style="font-size:20px; margin:6px 0;">คะแนนของคุณ: <b style="color:#f97316;">${game.score}</b></p>
+        <p style="font-size:16px; margin:6px 0;">คะแนนสูงสุด: <b style="color:#22c55e;">${game.highScore}</b></p>
+        ${isNewHigh ? '<p style="color:#f59e0b; font-weight:700;">🏆 สถิติใหม่! เยี่ยมมาก!</p>' : ''}
+      `,
+      confirmButtonText: '🔄 เล่นอีกครั้ง',
+      confirmButtonColor: '#6366f1',
+      showCancelButton: true,
+      cancelButtonText: '📖 ดูกติกา',
+      cancelButtonColor: '#64748b',
+      allowOutsideClick: false
+    }).then((result) => {
+      if (result.isConfirmed) {
+        startGame();
+      } else {
+        showRules(true);
+      }
+    });
+  }, 600);
+}
+
+function showRules(thenStart) {
+  Swal.fire({
+    title: '📖 กติกาการเล่น',
+    html: `
+      <div style="text-align:left; font-size:15px; line-height:1.7;">
+        <p>🚗 ใช้ปุ่ม <b>◀ ▶</b> หรือ <b>A / D</b> เพื่อเปลี่ยนเลน</p>
+        <p>📦 อ่านข้อความในกล่องที่ลอยลงมาให้ดี</p>
+        <p>✅ เก็บกล่องที่เป็น <b>ทางเลือกมีจรรยาบรรณ</b></p>
+        <p>❌ หลบกล่องที่เป็น <b>ทางเลือกผิดจรรยาบรรณ</b></p>
+        <p>❤️ พลังชีวิตมี 3 ดวง หากชนผิดจะเสียดวงชีวิต</p>
+        <p>⭐ ทุก 50 คะแนน สถานการณ์จะเปลี่ยนใหม่!</p>
+      </div>
+    `,
+    confirmButtonText: thenStart ? '🚦 เริ่มเล่น!' : 'เข้าใจแล้ว',
+    confirmButtonColor: '#6366f1'
+  }).then(() => {
+    if (thenStart) startGame();
+  });
+}
+
+// ============ INTRO ============
+window.addEventListener('load', () => {
+  resizeCanvas();
+  pickScenario();
+  updateHUD();
+  Swal.fire({
+    title: '<span class="bounce-title">🏎️ ซิ่งทะลุด่าน</span><br><span style="font-size:20px;">นักจรรยาบรรณดิจิทัล</span>',
+    html: `
+      <p style="font-size:16px; margin-top:10px;">เกมแข่งรถผจญภัยฝึกการตัดสินใจ<br>เรื่องจริยธรรมการใช้เทคโนโลยี</p>
+      <p style="font-size:14px; color:#64748b;">คะแนนสูงสุด: ${game.highScore}</p>
+    `,
+    confirmButtonText: '📖 ดูกติกาก่อนเล่น',
+    confirmButtonColor: '#6366f1'
+  }).then(() => {
+    showRules(true);
+  });
+});
+</script>
+</body>
+</html>
